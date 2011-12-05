@@ -1,5 +1,5 @@
 #######################
-# Shardis
+Shardis
 #######################
 
 This is a prototype for a sharding redis client. It's not nearly ready for
