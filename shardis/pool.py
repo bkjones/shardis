@@ -1,32 +1,10 @@
-"""
-Prototype testing a redis.ConnectionPool subclass that supports sharding in
-a way that's transparent to the end developer.
-
-"""
 from itertools import chain
 from zlib import crc32
+from redis import Connection, ConnectionPool
 
 __author__ = 'Brian K. Jones'
 __email__ = 'bkjones@gmail.com'
-__since__ = 12 / 05 / 11
-
-from redis import StrictRedis, Connection, ConnectionPool, ConnectionError
-
-class ShardClient(StrictRedis):
-    def execute_command(self, *args, **options):
-        """Execute a command and return a parsed response"""
-        pool = self.connection_pool
-        command_name = args[0]
-        connection = pool.get_connection(command_name, *args[1:], **options)
-        try:
-            connection.send_command(*args)
-            return self.parse_response(connection, command_name, **options)
-        except ConnectionError:
-            connection.disconnect()
-            connection.send_command(*args)
-            return self.parse_response(connection, command_name, **options)
-        finally:
-            pool.release(connection)
+__since__ = '2011-12-05'
 
 class ShardPool(ConnectionPool):
     """
@@ -46,7 +24,7 @@ class ShardPool(ConnectionPool):
 
         self.servers = servers
 
-        # build nodes, named using host:port of each server. So 
+        # build nodes, named using host:port of each server. So
         # sharding across ports on a single host is possible.
         self.nodes = list()
         for server in servers:
@@ -59,8 +37,8 @@ class ShardPool(ConnectionPool):
 
     def get_node_offset(self, key):
         """
-        The hash function used to find the index into the 
-        list of nodes that will be used. 
+        The hash function used to find the index into the
+        list of nodes that will be used.
 
         """
         c = crc32(key) >> 16 & 0x7fff
@@ -82,18 +60,18 @@ class ShardPool(ConnectionPool):
         """Create a new connection"""
         if self._created_connections >= self.max_connections:
             raise ConnectionError("Too many connections")
-        # this comes from base redis module. Not sure it makes a lot
+            # this comes from base redis module. Not sure it makes a lot
         # of sense to have this.
         self._created_connections += 1
         return self.connection_class(**server)
 
     def release(self, connection):
-        """Releases the connection back to the pool. This is, unfortunately, 
-        called directly by StrictRedis, which doesn't know about our whole 
-        sharding scheme. It shouldn't know about the connection or connection 
-        pool either. Alas, we press on and formulate a nodename here manually 
+        """Releases the connection back to the pool. This is, unfortunately,
+        called directly by StrictRedis, which doesn't know about our whole
+        sharding scheme. It shouldn't know about the connection or connection
+        pool either. Alas, we press on and formulate a nodename here manually
         from the connection parts :/
-        
+
         """
         nodename = ':'.join([connection.host, str(connection.port)])
         self._in_use_connections[nodename].remove(connection)
@@ -105,18 +83,3 @@ class ShardPool(ConnectionPool):
         for connection in all_conns:
             connection.disconnect()
 
-
-if __name__ == '__main__':
-    servers = [{'host': 'localhost', 'port': 6379, 'db': 0},
-               {'host': 'localhost', 'port': 6380, 'db': 0}]
-    p = ShardPool(servers=servers)
-    c = ShardClient(connection_pool=p)
-    c.set('whatever', 'foobar')
-    c.set('blah', 'blaz')
-    c.set('1234asdfzxv', 'fje,eodk')
-    v1 = c.get('1234asdfzxv')
-    v2 = c.get('blah')
-    print "v1: %s" % v1
-    print "v2: %s" % v2
-    assert v1 == 'fje,eodk'
-    assert v2 == 'blaz'
