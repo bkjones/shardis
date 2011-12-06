@@ -1,6 +1,7 @@
 from itertools import chain
 from zlib import crc32
 from redis import Connection, ConnectionPool
+from redis.exceptions import ConnectionError
 
 __author__ = 'Brian K. Jones'
 __email__ = 'bkjones@gmail.com'
@@ -14,6 +15,25 @@ class ShardPool(ConnectionPool):
     def __init__(self, servers, hash_type='default',
                  connection_class=Connection, max_connections=None,
                  **connection_kwargs):
+
+        """
+        :param list servers: List of dicts, each holding attributes of a redis
+                server instance. Dict must contain exactly the following:
+                            - 'host' (string hostname to connect to)
+                            - 'port' (int port to connect to on 'host')
+                            - 'db' (int redis db number to use)
+        :param string hash_type: here for future use. Currently overriding this
+                is not supported.
+        :param connection_class: class used for making new connections. This is
+                either redis.Connection, or a subclass thereof.
+        :param max_connections: Not sure we need this here. Max conns to make
+                to a database. This is left over from the base redis class,
+                which only connects to one server. TODO: either make it useful
+                in a sharding context, or scrap it if feasible.
+        :param connection_kwargs: Gets passed to the connection class
+        :return: None
+
+        """
 
         self.connection_class = connection_class
         self.max_connections = max_connections or 2**31
@@ -79,7 +99,9 @@ class ShardPool(ConnectionPool):
 
     def disconnect(self):
         """Disconnects all connections in the pool"""
-        all_conns = chain(self._available_connections, self._in_use_connections)
+        all_conns = chain(self._available_connections.values(), self._in_use_connections.values())
         for connection in all_conns:
-            connection.disconnect()
+            if connection:
+                connection.disconnect()
+        return
 
