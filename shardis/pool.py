@@ -99,9 +99,9 @@ class ShardPool(ConnectionPool):
 
     def disconnect(self):
         """Disconnects all connections in the pool"""
-        all_conns = chain(self._available_connections.values(), self._in_use_connections.values())
+        all_conns = chain(*(self._available_connections.values() +
+                            self._in_use_connections.values()))
         for connection in all_conns:
-            if connection:
-                connection.disconnect()
+            connection.disconnect()
         return
 

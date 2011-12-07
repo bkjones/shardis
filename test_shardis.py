@@ -2,6 +2,7 @@
 import unittest2 as unittest
 from mock import Mock, patch
 from shardis import pool, client
+from redis import ConnectionError
 
 class TestPool(unittest.TestCase):
     def setUp(self):
@@ -46,6 +47,14 @@ class TestPool(unittest.TestCase):
         self.assertFalse(mypool._created_connections)
         mypool.make_connection(self.servers[0])
         self.assertEqual(mypool._created_connections, 1)
+
+    def test_make_conn_too_many_conns(self):
+        mypool = pool.ShardPool(self.servers)
+        mypool.max_connections = 1
+        mypool._created_connections = 2
+        mypool.connection_class = Mock()
+        with self.assertRaises(ConnectionError):
+            mypool.make_connection(self.servers[0])
 
     def test_release_connection(self):
         conn = Mock()
